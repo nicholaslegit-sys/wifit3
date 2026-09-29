@@ -12,7 +12,7 @@ This file provides guidance to coding agents when working with code in this repo
 ## Porting Session Cheatsheet
 
 - **Porting code style**: When porting or working within `src/wifit3/chips/**/*`: `docs/porting/CODE-STYLE.md`.
-- **Porting / bringing up a chip?** Playbook: `docs/porting/METHODOLOGY.md` (or run `/port <chip>` in `.claude/skills/port`).
+- **Porting / bringing up a chip?** Playbook: `docs/porting/METHODOLOGY.md`.
 - **Per-chipset port-reference docs**: each chip dir has a `<CHIP>.md`. Template + rules in `docs/porting/CHIP-DOC.md`.
 - **Within `chips/`, don't re-use code from another driver.** *Why:* a shared core meant a fix for one device forced re-testing every device and risked regressing the others.
 - **Register READs can mutate device state: never assume two reads commute, never reorder them vs the capture.**
