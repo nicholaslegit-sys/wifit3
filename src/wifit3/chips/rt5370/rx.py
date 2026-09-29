@@ -144,8 +144,17 @@ def read_rx_burst(dev: usb.core.Device, ep: int, *, max_size: int = 16384,
             logger.trace("RX bulk-IN <%dB>", len(data))
         return data
     except usb.core.USBError as e:
-        err = getattr(e, "errno", None)
-        if err in (110, 10060) or "timeout" in str(e).lower():
+        # An empty-channel read returns no data within timeout_ms — a normal event, not a
+        # fault. libusb reports LIBUSB_ERROR_TIMEOUT (-7) on every OS, but the errno it
+        # surfaces is platform-specific: ETIMEDOUT is 110 on Linux, 60 on macOS/BSD, and
+        # WSAETIMEDOUT is 10060 on Windows. Keying on 110/10060 alone made every quiet read on
+        # macOS re-raise (its message is "…timed out", so the "timeout" substring missed too),
+        # so 5 in a row (hopping onto an AP-less channel) tripped the RX reader's give-up and
+        # fired a bogus "Adapter disconnected". A real unplug is NO_DEVICE, caught separately.
+        msg = str(e).lower()
+        if (getattr(e, "backend_error_code", None) == -7
+                or getattr(e, "errno", None) in (60, 110, 10060)
+                or "timed out" in msg or "timeout" in msg):
             if logger.isEnabledFor(TRACE):
                 logger.trace("RX bulk-IN timeout")
             return None
