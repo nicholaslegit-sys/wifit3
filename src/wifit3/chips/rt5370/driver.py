@@ -142,9 +142,24 @@ class RT5370Driver(Driver):
     def _tune(self, channel: int) -> None:
         # Runs on an executor thread; _hw_lock guarantees only one hardware op touches
         # the device at a time even when a cancelled tune's thread is still draining.
-        with self._hw_lock:
-            chan.set_channel(self.transport, self._chip, self._eeprom, self._drv, channel)
-            self._lna_gain = chan.config_lna_gain(self._eeprom, channel)
+        # chan.set_channel stops/restarts the HW RX queue and rewrites ~30 RFCSR/BBP/MAC
+        # registers over the control endpoint; a bulk-IN URB from the reader thread still
+        # in flight on the same device handle is the rt5572/rtl8821cu-documented "RF/BBP
+        # writes don't latch" wedge — it surfaces a few hops later as a dead RX pipe, which
+        # the reader's error-streak counter then misreports as the adapter having been
+        # unplugged. Pause the reader across the tune (mirrors the rt5572 "stop_queue +
+        # pause RX reader across deliberate tunes" fix); _reader is None for the very first
+        # tune in connect() (started only after it returns), so guard for that.
+        reader = self._reader
+        if reader is not None:
+            reader.pause()
+        try:
+            with self._hw_lock:
+                chan.set_channel(self.transport, self._chip, self._eeprom, self._drv, channel)
+                self._lna_gain = chan.config_lna_gain(self._eeprom, channel)
+        finally:
+            if reader is not None:
+                reader.resume()
 
     async def connect(self, progress_cb: Optional[ProgressCallback] = None) -> bool:
         loop = asyncio.get_running_loop()
